@@ -59,6 +59,11 @@ class SpinOut(BaseModel):
         )
 
 
+class DetectorStatusOut(BaseModel):
+    state: str | None
+    round_id: int | None
+
+
 class StreetStatsOut(BaseModel):
     street: int
     numbers: tuple[int, int, int]

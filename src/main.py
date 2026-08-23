@@ -1,8 +1,14 @@
+import asyncio
+import threading
 import time
 from pathlib import Path
 
 import cv2
 import easyocr
+import uvicorn
+
+from api.app import create_app
+from api.websocket_manager import ConnectionManager
 
 from capture.camera_source import CameraSource
 
@@ -33,10 +39,19 @@ from detection.status_result_recognizer import (
     StatusResultRecognizer,
 )
 
+from detector.status import DetectorStatusHolder
+
 from domain.detector_state import DetectorState
 from domain.game_status import GameStatus
 from domain.roulette_result import ResultEvidence
 from domain.round_state_machine import RoundStateMachine
+
+from events.event_publisher import EventPublisher
+from events.event_types import (
+    RoundStartedEvent,
+    SpinConfirmedEvent,
+    StateChangedEvent,
+)
 
 from storage.database import Database
 from storage.models import SpinSource
@@ -58,6 +73,40 @@ CAMERA_INDEX = 1
 
 STATUS_OCR_INTERVAL_SECONDS = 0.30
 RESULT_OCR_INTERVAL_SECONDS = 0.20
+
+API_HOST = "0.0.0.0"
+API_PORT = 8000
+
+
+# ============================================================
+# API SERVER (background thread)
+# ============================================================
+
+def start_api_server(app):
+    """Runs Uvicorn on its own asyncio event loop in a background
+    thread, so the blocking cv2 loop can keep the main thread (required
+    for cv2's GUI calls on Windows)."""
+
+    config = uvicorn.Config(
+        app,
+        host=API_HOST,
+        port=API_PORT,
+        log_level="warning",
+    )
+
+    server = uvicorn.Server(config)
+
+    def run():
+        asyncio.run(server.serve())
+
+    thread = threading.Thread(
+        target=run,
+        daemon=True,
+    )
+
+    thread.start()
+
+    return server, thread
 
 
 # ============================================================
@@ -116,6 +165,54 @@ def main():
     spin_repository = SpinRepository(
         database
     )
+
+    # ========================================================
+    # API / EVENTS
+    # ========================================================
+
+    connection_manager = ConnectionManager()
+
+    detector_status_holder = DetectorStatusHolder()
+
+    event_publisher = EventPublisher(
+        connection_manager
+    )
+
+    api_app = create_app(
+        database=database,
+        round_repository=round_repository,
+        spin_repository=spin_repository,
+        connection_manager=connection_manager,
+        event_publisher=event_publisher,
+    )
+
+    api_app.state.detector_status_holder = (
+        detector_status_holder
+    )
+
+    api_server, api_thread = start_api_server(
+        api_app
+    )
+
+    print(
+        f"API running on "
+        f"http://{API_HOST}:{API_PORT} "
+        f"(docs at /docs)"
+    )
+
+    def publish_state():
+
+        detector_status_holder.update(
+            state_machine.state,
+            state_machine.round_id,
+        )
+
+        event_publisher.publish(
+            StateChangedEvent(
+                state=state_machine.state.name,
+                round_id=state_machine.round_id,
+            )
+        )
 
     # ========================================================
     # CAMERA
@@ -488,6 +585,14 @@ def main():
                             )
                             print()
 
+                            event_publisher.publish(
+                                RoundStartedEvent(
+                                    round_id=event.round_id
+                                )
+                            )
+
+                            publish_state()
+
                     # =========================================
                     # BETS CLOSING
                     # =========================================
@@ -507,6 +612,8 @@ def main():
                                 f"{state_machine.round_id}: "
                                 "bets closing."
                             )
+
+                            publish_state()
 
                     # =========================================
                     # BETS CLOSED
@@ -543,6 +650,8 @@ def main():
                                 "Waiting for result..."
                             )
 
+                            publish_state()
+
                     # =========================================
                     # NEXT GAME SOON
                     # =========================================
@@ -562,6 +671,8 @@ def main():
                                 f"{state_machine.round_id}: "
                                 "next game soon."
                             )
+
+                            publish_state()
 
                     # =========================================
                     # RESULT TEXT DETECTED
@@ -603,6 +714,8 @@ def main():
                                     f"{latest_status_result.number} "
                                     f"{latest_status_result.color.value}"
                                 )
+
+                                publish_state()
 
             # =================================================
             # DUAL RESULT OCR
@@ -836,6 +949,25 @@ def main():
                                         f"{stored_spin.id}"
                                     )
 
+                                    publish_state()
+
+                                    event_publisher.publish(
+                                        SpinConfirmedEvent(
+                                            round_id=(
+                                                current_db_round_id
+                                            ),
+                                            number=(
+                                                confirmed.number
+                                            ),
+                                            color=(
+                                                confirmed.color.value
+                                            ),
+                                            confidence=(
+                                                confirmed.confidence
+                                            ),
+                                        )
+                                    )
+
                                 else:
 
                                     print(
@@ -930,6 +1062,10 @@ def main():
         source.stop()
 
         cv2.destroyAllWindows()
+
+        api_server.should_exit = True
+
+        api_thread.join(timeout=5)
 
 
 if __name__ == "__main__":

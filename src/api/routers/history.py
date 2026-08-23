@@ -1,10 +1,13 @@
 from fastapi import APIRouter, Depends, HTTPException
 
 from api.dependencies import (
+    get_event_publisher,
     get_manual_result_service,
     get_round_repository,
 )
 from api.schemas import ManualResultIn, RoundOut, SpinOut
+from events.event_publisher import EventPublisher
+from events.event_types import ManualResultEvent
 from storage.manual_result_service import ManualResultService
 from storage.round_repository import RoundRepository
 
@@ -55,6 +58,7 @@ def add_manual_result(
     round_id: int,
     body: ManualResultIn,
     manual_result_service: ManualResultService = Depends(get_manual_result_service),
+    event_publisher: EventPublisher = Depends(get_event_publisher),
 ) -> SpinOut:
 
     try:
@@ -68,6 +72,14 @@ def add_manual_result(
             status_code=_status_for_value_error(exc),
             detail=str(exc),
         ) from exc
+
+    event_publisher.publish(
+        ManualResultEvent(
+            round_id=round_id,
+            number=spin.number,
+            color=spin.color,
+        )
+    )
 
     return SpinOut.from_domain(spin)
 

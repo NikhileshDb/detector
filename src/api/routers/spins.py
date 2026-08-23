@@ -2,9 +2,12 @@ from fastapi import APIRouter, Depends, HTTPException
 
 from api.dependencies import (
     get_correction_service,
+    get_event_publisher,
     get_spin_repository,
 )
 from api.schemas import CorrectionIn, SpinOut
+from events.event_publisher import EventPublisher
+from events.event_types import CorrectionAppliedEvent
 from storage.correction_service import CorrectionService
 from storage.spin_repository import SpinRepository
 
@@ -46,6 +49,7 @@ def correct_spin(
     body: CorrectionIn,
     correction_service: CorrectionService = Depends(get_correction_service),
     spin_repository: SpinRepository = Depends(get_spin_repository),
+    event_publisher: EventPublisher = Depends(get_event_publisher),
 ) -> SpinOut:
 
     try:
@@ -66,5 +70,13 @@ def correct_spin(
         raise HTTPException(status_code=status_code, detail=message) from exc
 
     spin = spin_repository.get_by_round(round_id)
+
+    event_publisher.publish(
+        CorrectionAppliedEvent(
+            round_id=round_id,
+            corrected_number=spin.number,
+            corrected_color=spin.color,
+        )
+    )
 
     return SpinOut.from_domain(spin)

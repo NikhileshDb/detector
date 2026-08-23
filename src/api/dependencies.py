@@ -1,5 +1,6 @@
 from fastapi import Request
 
+from events.event_publisher import EventPublisher
 from storage.correction_service import CorrectionService
 from storage.manual_result_service import ManualResultService
 from storage.round_repository import RoundRepository
@@ -32,6 +33,13 @@ def get_correction_service(
 ) -> CorrectionService:
 
     return request.app.state.correction_service
+
+
+def get_event_publisher(
+    request: Request,
+) -> EventPublisher:
+
+    return request.app.state.event_publisher
 
 
 def get_detector_status(
