@@ -32,3 +32,22 @@ def get_correction_service(
 ) -> CorrectionService:
 
     return request.app.state.correction_service
+
+
+def get_detector_status(
+    request: Request,
+) -> tuple[str | None, int | None]:
+    """Returns (state_name, round_id). Wired to a real DetectorStatusHolder
+    once main.py constructs one; until then app.state has none and this
+    reports unknown."""
+
+    holder = getattr(
+        request.app.state,
+        "detector_status_holder",
+        None,
+    )
+
+    if holder is None:
+        return None, None
+
+    return holder.snapshot()

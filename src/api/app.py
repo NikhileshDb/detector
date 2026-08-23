@@ -1,6 +1,6 @@
 from fastapi import FastAPI
 
-from api.routers import history, spins
+from api.routers import dashboard, history, spins
 from storage.correction_service import CorrectionService
 from storage.database import Database
 from storage.manual_result_service import ManualResultService
@@ -34,5 +34,6 @@ def create_app(
 
     app.include_router(history.router)
     app.include_router(spins.router)
+    app.include_router(dashboard.router)
 
     return app
