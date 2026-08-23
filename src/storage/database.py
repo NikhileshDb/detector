@@ -1,5 +1,7 @@
 import sqlite3
+from contextlib import closing, contextmanager
 from pathlib import Path
+from typing import Iterator
 
 
 DATABASE_PATH = "data/roulette.db"
@@ -34,6 +36,16 @@ class Database:
         )
 
         return connection
+
+    @contextmanager
+    def transaction(
+        self,
+    ) -> Iterator[sqlite3.Connection]:
+
+        with closing(self.connect()) as connection:
+
+            with connection:
+                yield connection
 
     def initialize(
         self,

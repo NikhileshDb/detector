@@ -1,7 +1,11 @@
 from fastapi import APIRouter, Depends, HTTPException
 
-from api.dependencies import get_round_repository
-from api.schemas import RoundOut
+from api.dependencies import (
+    get_manual_result_service,
+    get_round_repository,
+)
+from api.schemas import ManualResultIn, RoundOut, SpinOut
+from storage.manual_result_service import ManualResultService
 from storage.round_repository import RoundRepository
 
 
@@ -44,3 +48,38 @@ def get_round(
         raise HTTPException(status_code=404, detail=f"Round {round_id} not found.")
 
     return RoundOut.from_domain(round_item)
+
+
+@router.post("/{round_id}/manual-result", response_model=SpinOut)
+def add_manual_result(
+    round_id: int,
+    body: ManualResultIn,
+    manual_result_service: ManualResultService = Depends(get_manual_result_service),
+) -> SpinOut:
+
+    try:
+        spin = manual_result_service.add_missing_result(
+            round_id=round_id,
+            number=body.number,
+        )
+
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=_status_for_value_error(exc),
+            detail=str(exc),
+        ) from exc
+
+    return SpinOut.from_domain(spin)
+
+
+def _status_for_value_error(exc: ValueError) -> int:
+
+    message = str(exc)
+
+    if "not found" in message:
+        return 404
+
+    if "already has a result" in message:
+        return 409
+
+    return 400

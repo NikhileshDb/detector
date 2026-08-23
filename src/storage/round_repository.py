@@ -77,9 +77,10 @@ class RoundRepository:
     def get_by_id(
         self,
         round_id: int,
+        connection=None,
     ) -> StoredRound | None:
 
-        with self.database.connect() as connection:
+        if connection is not None:
 
             row = connection.execute(
                 """
@@ -89,6 +90,19 @@ class RoundRepository:
                 """,
                 (round_id,),
             ).fetchone()
+
+        else:
+
+            with self.database.connect() as conn:
+
+                row = conn.execute(
+                    """
+                    SELECT *
+                    FROM rounds
+                    WHERE id = ?
+                    """,
+                    (round_id,),
+                ).fetchone()
 
         if row is None:
             return None
@@ -118,13 +132,14 @@ class RoundRepository:
     def mark_completed(
         self,
         round_id: int,
+        connection=None,
     ) -> None:
 
         now = datetime.now(
             timezone.utc
         )
 
-        with self.database.connect() as connection:
+        if connection is not None:
 
             connection.execute(
                 """
@@ -140,6 +155,25 @@ class RoundRepository:
                     round_id,
                 ),
             )
+
+        else:
+
+            with self.database.connect() as conn:
+
+                conn.execute(
+                    """
+                    UPDATE rounds
+                    SET
+                        status = ?,
+                        completed_at = ?
+                    WHERE id = ?
+                    """,
+                    (
+                        RoundStatus.COMPLETED.value,
+                        now.isoformat(),
+                        round_id,
+                    ),
+                )
 
     def latest(
         self,

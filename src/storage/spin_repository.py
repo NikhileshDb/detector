@@ -23,6 +23,7 @@ class SpinRepository:
         source: SpinSource,
         confidence: float | None = None,
         original_number: str | None = None,
+        connection=None,
     ) -> StoredSpin:
 
         spin_id = str(
@@ -33,37 +34,44 @@ class SpinRepository:
             timezone.utc
         )
 
-        with self.database.connect() as connection:
+        params = (
+            spin_id,
+            round_id,
+            number,
+            color,
+            source.value,
+            confidence,
+            original_number,
+            now.isoformat(),
+            now.isoformat(),
+        )
 
-            connection.execute(
-                """
-                INSERT INTO spins (
-                    id,
-                    round_id,
-                    number,
-                    color,
-                    source,
-                    confidence,
-                    original_number,
-                    detected_at,
-                    created_at
-                )
-                VALUES (
-                    ?, ?, ?, ?, ?, ?, ?, ?, ?
-                )
-                """,
-                (
-                    spin_id,
-                    round_id,
-                    number,
-                    color,
-                    source.value,
-                    confidence,
-                    original_number,
-                    now.isoformat(),
-                    now.isoformat(),
-                ),
+        sql = """
+            INSERT INTO spins (
+                id,
+                round_id,
+                number,
+                color,
+                source,
+                confidence,
+                original_number,
+                detected_at,
+                created_at
             )
+            VALUES (
+                ?, ?, ?, ?, ?, ?, ?, ?, ?
+            )
+            """
+
+        if connection is not None:
+
+            connection.execute(sql, params)
+
+        else:
+
+            with self.database.connect() as conn:
+
+                conn.execute(sql, params)
 
         return StoredSpin(
             id=spin_id,
@@ -79,18 +87,30 @@ class SpinRepository:
     def get_by_round(
         self,
         round_id: int,
+        connection=None,
     ) -> StoredSpin | None:
 
-        with self.database.connect() as connection:
+        sql = """
+            SELECT *
+            FROM spins
+            WHERE round_id = ?
+            """
+
+        if connection is not None:
 
             row = connection.execute(
-                """
-                SELECT *
-                FROM spins
-                WHERE round_id = ?
-                """,
+                sql,
                 (round_id,),
             ).fetchone()
+
+        else:
+
+            with self.database.connect() as conn:
+
+                row = conn.execute(
+                    sql,
+                    (round_id,),
+                ).fetchone()
 
         if row is None:
             return None
@@ -124,10 +144,12 @@ class SpinRepository:
         round_id: int,
         corrected_number: str,
         corrected_color: str,
+        connection=None,
     ) -> None:
 
         existing = self.get_by_round(
-            round_id
+            round_id,
+            connection=connection,
         )
 
         if existing is None:
@@ -135,26 +157,33 @@ class SpinRepository:
                 f"No spin exists for round {round_id}"
             )
 
-        with self.database.connect() as connection:
+        sql = """
+            UPDATE spins
+            SET
+                original_number = ?,
+                number = ?,
+                color = ?,
+                source = ?
+            WHERE round_id = ?
+            """
 
-            connection.execute(
-                """
-                UPDATE spins
-                SET
-                    original_number = ?,
-                    number = ?,
-                    color = ?,
-                    source = ?
-                WHERE round_id = ?
-                """,
-                (
-                    existing.number,
-                    corrected_number,
-                    corrected_color,
-                    SpinSource.CORRECTED.value,
-                    round_id,
-                ),
-            )
+        params = (
+            existing.number,
+            corrected_number,
+            corrected_color,
+            SpinSource.CORRECTED.value,
+            round_id,
+        )
+
+        if connection is not None:
+
+            connection.execute(sql, params)
+
+        else:
+
+            with self.database.connect() as conn:
+
+                conn.execute(sql, params)
 
     def _map(
         self,

@@ -1,5 +1,7 @@
 from fastapi import Request
 
+from storage.correction_service import CorrectionService
+from storage.manual_result_service import ManualResultService
 from storage.round_repository import RoundRepository
 from storage.spin_repository import SpinRepository
 
@@ -16,3 +18,17 @@ def get_spin_repository(
 ) -> SpinRepository:
 
     return request.app.state.spin_repository
+
+
+def get_manual_result_service(
+    request: Request,
+) -> ManualResultService:
+
+    return request.app.state.manual_result_service
+
+
+def get_correction_service(
+    request: Request,
+) -> CorrectionService:
+
+    return request.app.state.correction_service

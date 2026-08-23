@@ -24,6 +24,14 @@ class RoundOut(BaseModel):
         )
 
 
+class ManualResultIn(BaseModel):
+    number: str
+
+
+class CorrectionIn(BaseModel):
+    corrected_number: str
+
+
 class SpinOut(BaseModel):
     id: str
     round_id: int
