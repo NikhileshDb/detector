@@ -79,3 +79,25 @@ To detect the wheel close-up:
 The overlay then shows `View: WHEEL` or `View: OTHER`. Each completed round
 saves its stream FPS, duplicate-frame ratio and wheel-view ratio to the
 `capture_stats` table, so later analysis can skip spins with poor video.
+
+## Rotor position at bets closed
+
+On the auto wheel the ball is launched after betting closes, so only the
+rotor can be measured in time to bet. The detector follows the green zero
+pocket and, when the table leaves **BETS CLOSING**, saves the rotor's speed
+and the pocket at the top of the screen to `rotor_snapshots`.
+
+1. With the wheel close-up on screen, press **T** and draw a box tightly
+   around the ring of numbers on the rotor (the outer edge of the numbers).
+2. The overlay draws a green ROTOR box, and each round prints
+   `Rotor at bets closed: ...`.
+
+After a few hundred spins, run the offset test from `src`:
+
+```
+../.venv/Scripts/python.exe -m analytics.rotor_offset
+```
+
+It reports the busiest 5-pocket window of result-vs-rotor offsets for each
+rotor direction, with a p-value that accounts for picking the best window.
+A p-value above 0.05 means the rotor position does not predict the result.

@@ -1,6 +1,7 @@
 import asyncio
 import threading
 import time
+from dataclasses import replace
 from pathlib import Path
 
 import cv2
@@ -16,7 +17,10 @@ from capture.camera_source import CameraSource
 from capture.screen_source import ScreenSource
 from capture.threaded_source import ThreadedFrameSource
 
-from config.roi_config import load_roi_config
+from config.roi_config import (
+    load_roi_config,
+    save_roi_config,
+)
 from config.setup_rois import configure_rois
 
 from detection.easyocr_number_recognizer import (
@@ -42,6 +46,8 @@ from detection.roi_processor import RoiProcessor
 from detection.status_result_recognizer import (
     StatusResultRecognizer,
 )
+from detection.rotor_tracker import RotorTracker
+from detection.roi_selector import select_roi
 from detection.wheel_view_detector import (
     WheelViewDetector,
 )
@@ -62,6 +68,9 @@ from events.event_types import (
 
 from storage.capture_stats_repository import (
     CaptureStatsRepository,
+)
+from storage.rotor_snapshot_repository import (
+    RotorSnapshotRepository,
 )
 from storage.database import Database
 from storage.models import SpinSource
@@ -216,6 +225,10 @@ def main():
         CaptureStatsRepository(database)
     )
 
+    rotor_snapshot_repository = (
+        RotorSnapshotRepository(database)
+    )
+
     # ========================================================
     # API / EVENTS
     # ========================================================
@@ -356,6 +369,7 @@ def main():
     roi_config = None
     result_detector = None
     wheel_view_detector = None
+    rotor_tracker = None
     wheel_visible = None
     last_frame_index = 0
 
@@ -391,6 +405,9 @@ def main():
         )
         print(
             "W = Capture wheel close-up baseline"
+        )
+        print(
+            "T = Select the rotor's number ring"
         )
         print()
 
@@ -561,6 +578,33 @@ def main():
                         "WHEEL",
                         (0, 165, 255),
                     )
+
+            # =================================================
+            # ROTOR
+            # =================================================
+
+            state_before_status = state_machine.state
+
+            if (
+                rotor_tracker is None
+                and roi_config is not None
+                and roi_config.rotor is not None
+            ):
+                rotor_tracker = RotorTracker(
+                    roi_config.rotor
+                )
+
+            if rotor_tracker is not None:
+                rotor_tracker.observe(
+                    frame,
+                    timed.timestamp,
+                )
+                draw_roi(
+                    preview,
+                    roi_config.rotor,
+                    "ROTOR",
+                    (0, 255, 0),
+                )
 
             # =================================================
             # WHEEL VIEW / CAPTURE STATS
@@ -847,6 +891,46 @@ def main():
                                 )
 
                                 publish_state()
+
+            # =================================================
+            # ROTOR SNAPSHOT WHEN BETS CLOSE
+            # =================================================
+
+            # Betting ends when the table leaves BETS CLOSING.
+            # Record where the rotor was at that moment so the
+            # result can later be compared against it.
+            if (
+                state_before_status
+                == DetectorState.BETS_CLOSING
+                and state_machine.state
+                != DetectorState.BETS_CLOSING
+                and rotor_tracker is not None
+                and current_db_round_id is not None
+            ):
+
+                rotor_state = rotor_tracker.state()
+
+                if rotor_state is not None:
+
+                    rotor_snapshot_repository.save(
+                        current_db_round_id,
+                        rotor_state,
+                        rotor_state.pocket_at(),
+                    )
+
+                    print(
+                        f"Rotor at bets closed: "
+                        f"{rotor_state.rev_per_second:+.3f} rev/s, "
+                        f"pocket index "
+                        f"{rotor_state.pocket_at()} at top"
+                    )
+
+                else:
+
+                    print(
+                        "Rotor not tracked at bets closed "
+                        "(zero pocket not visible)."
+                    )
 
             # =================================================
             # RESULT OCR
@@ -1229,6 +1313,7 @@ def main():
                     configure_rois(
                         frame,
                         ROI_CONFIG_PATH,
+                        roi_config,
                     )
                 )
 
@@ -1237,6 +1322,46 @@ def main():
                     roi_config = (
                         new_config
                     )
+
+                    rotor_tracker = None
+
+            if key == ord("t"):
+
+                if roi_config is None:
+
+                    print(
+                        "Configure the ROIs first (R)."
+                    )
+
+                else:
+
+                    print(
+                        "Draw a box tightly around the ring "
+                        "of numbers on the rotor."
+                    )
+
+                    rotor = select_roi(
+                        frame,
+                        "Select ROTOR number ring",
+                    )
+
+                    if rotor is not None:
+
+                        roi_config = replace(
+                            roi_config,
+                            rotor=rotor,
+                        )
+
+                        save_roi_config(
+                            roi_config,
+                            ROI_CONFIG_PATH,
+                        )
+
+                        rotor_tracker = None
+
+                        print(
+                            "Rotor ring saved."
+                        )
 
             if (
                 key == ord("b")
