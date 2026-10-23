@@ -39,6 +39,15 @@ curl http://<lan-ip>:8000/api/status
 .venv/Scripts/python.exe -m pytest
 ```
 
+## Capture source
+
+By default the detector grabs the screen directly (`CAPTURE_MODE = "screen"`
+in `main.py`), so OBS is not needed. Open the live table in the browser on
+the primary monitor. For speed, set `SCREEN_REGION` to just the browser
+window, e.g. `{"left": 0, "top": 0, "width": 1920, "height": 1080}`, and
+redo the ROIs with **R** after changing it. Set `CAPTURE_MODE = "camera"` to
+use the OBS Virtual Camera (`CAMERA_INDEX`) instead.
+
 ## Capture timing and wheel view
 
 Frames are read on a background thread and timestamped as they arrive, so
