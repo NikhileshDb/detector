@@ -13,6 +13,7 @@ from api.websocket_manager import ConnectionManager
 from analytics.capture_stats import CaptureStatsAccumulator
 
 from capture.camera_source import CameraSource
+from capture.screen_source import ScreenSource
 from capture.threaded_source import ThreadedFrameSource
 
 from config.roi_config import load_roi_config
@@ -82,7 +83,17 @@ WHEEL_REFERENCE_PATH = (
     "references/wheel_view.png"
 )
 
+# "screen" grabs the monitor directly (no OBS needed).
+# "camera" reads a capture device such as the OBS Virtual Camera.
+CAPTURE_MODE = "screen"
+
 CAMERA_INDEX = 1
+
+# Monitor 1 is the primary display. Set SCREEN_REGION to
+# {"left": x, "top": y, "width": w, "height": h} to grab only the
+# browser window, which is faster than the whole screen.
+SCREEN_MONITOR = 1
+SCREEN_REGION = None
 
 STATUS_OCR_INTERVAL_SECONDS = 0.30
 RESULT_OCR_INTERVAL_SECONDS = 0.20
@@ -236,7 +247,12 @@ def main():
     # ========================================================
 
     source = ThreadedFrameSource(
-        CameraSource(
+        ScreenSource(
+            monitor=SCREEN_MONITOR,
+            region=SCREEN_REGION,
+        )
+        if CAPTURE_MODE == "screen"
+        else CameraSource(
             camera_index=CAMERA_INDEX,
         )
     )
