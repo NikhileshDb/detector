@@ -7,11 +7,30 @@ offsets are uniform. A cluster of offsets would be a usable signal.
 """
 import random
 from collections import Counter
+from datetime import datetime
 from math import sqrt
+from statistics import median
 
 from analytics.wheel_motion.wheel_order import wheel_index
 
 POCKETS = 37
+
+
+def consistent(rows: list[dict], tolerance_seconds: float = 8.0) -> list[dict]:
+    """Drop pairs whose snapshot-to-result time is far from typical.
+
+    Bets-closed to result takes about the same time every round. A pair far
+    off that means the snapshot or the result was read late, or they belong
+    to different rounds, and the rotor phase would be wrong.
+    """
+    gaps = [
+        (datetime.fromisoformat(row["detected_at"]) - datetime.fromisoformat(row["recorded_at"])).total_seconds()
+        for row in rows
+    ]
+    if not gaps:
+        return []
+    typical = median(gaps)
+    return [row for row, gap in zip(rows, gaps) if abs(gap - typical) <= tolerance_seconds]
 
 
 def offsets(rows: list[dict], direction: int | None = None) -> list[int]:
@@ -65,7 +84,9 @@ if __name__ == "__main__":
     from storage.database import Database
     from storage.rotor_snapshot_repository import RotorSnapshotRepository
 
-    rows = RotorSnapshotRepository(Database()).with_results()
+    paired = RotorSnapshotRepository(Database()).with_results()
+    rows = consistent(paired)
+    print(f"{len(paired)} spins with rotor and result; {len(paired) - len(rows)} dropped for unusual timing")
     for label, direction in (("all", None), ("clockwise", 1), ("anticlockwise", -1)):
         report = window_report(offsets(rows, direction))
         if report["spins"] == 0:
