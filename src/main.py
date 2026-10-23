@@ -85,7 +85,7 @@ WHEEL_REFERENCE_PATH = (
 
 # "screen" grabs the monitor directly (no OBS needed).
 # "camera" reads a capture device such as the OBS Virtual Camera.
-CAPTURE_MODE = "screen"
+CAPTURE_MODE = "camera"
 
 CAMERA_INDEX = 1
 
