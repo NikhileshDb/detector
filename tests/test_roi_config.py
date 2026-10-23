@@ -19,3 +19,13 @@ def test_wheel_roi_round_trips(tmp_path):
     save_roi_config(config, str(path))
 
     assert load_roi_config(str(path)) == config
+
+
+def test_rotor_roi_round_trips(tmp_path):
+    path = tmp_path / "roi.json"
+    roi = Roi(1, 2, 3, 4)
+    config = DetectorRoiConfig(countdown=roi, result=roi, number=roi, rotor=Roi(610, 245, 690, 580))
+
+    save_roi_config(config, str(path))
+
+    assert load_roi_config(str(path)).rotor == Roi(610, 245, 690, 580)

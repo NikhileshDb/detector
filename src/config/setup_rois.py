@@ -8,6 +8,7 @@ from detection.roi_selector import select_roi
 def configure_rois(
     frame,
     output_path: str = "roi_config.json",
+    previous: DetectorRoiConfig | None = None,
 ) -> DetectorRoiConfig | None:
 
     print()
@@ -56,6 +57,7 @@ def configure_rois(
         result=result,
         number=number,
         wheel=wheel,
+        rotor=previous.rotor if previous else None,
     )
 
     save_roi_config(

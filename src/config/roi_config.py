@@ -17,6 +17,7 @@ class DetectorRoiConfig:
     result: Roi
     number: Roi
     wheel: Roi | None = None
+    rotor: Roi | None = None
 
 
 def _roi_from_dict(data: dict) -> Roi:
@@ -77,6 +78,11 @@ def load_roi_config(
         wheel=(
             _roi_from_dict(data["wheel"])
             if data.get("wheel")
+            else None
+        ),
+        rotor=(
+            _roi_from_dict(data["rotor"])
+            if data.get("rotor")
             else None
         ),
     )

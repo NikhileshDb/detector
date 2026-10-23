@@ -129,6 +129,20 @@ class Database:
                     REFERENCES rounds(id)
                     ON DELETE CASCADE
                 );
+
+
+                CREATE TABLE IF NOT EXISTS rotor_snapshots (
+                    round_id INTEGER PRIMARY KEY,
+                    zero_angle REAL NOT NULL,
+                    rev_per_second REAL NOT NULL,
+                    residual_pockets REAL NOT NULL,
+                    samples INTEGER NOT NULL,
+                    pocket_at_top INTEGER NOT NULL,
+                    recorded_at TEXT NOT NULL,
+                    FOREIGN KEY (round_id)
+                    REFERENCES rounds(id)
+                    ON DELETE CASCADE
+                );
                 """
             )
 
