@@ -37,3 +37,16 @@ def test_rates_are_zero_before_two_frames():
 
     assert clock.stream_fps == 0.0
     assert clock.capture_fps == 0.0
+
+
+def test_small_motion_counts_as_a_new_frame():
+    # A slowly turning rotor changes only a thin ring of pixels between
+    # frames; that must not be mistaken for a repeated frame.
+    clock = FrameClock()
+    first = np.zeros((1080, 1920, 3), dtype=np.uint8)
+    moved = first.copy()
+    moved[500:540, 900:940] = 40
+
+    clock.stamp(first, 0.0)
+
+    assert not clock.stamp(moved, 1 / 30).is_duplicate
