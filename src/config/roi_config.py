@@ -16,6 +16,7 @@ class DetectorRoiConfig:
     countdown: Roi
     result: Roi
     number: Roi
+    wheel: Roi | None = None
 
 
 def _roi_from_dict(data: dict) -> Roi:
@@ -72,5 +73,10 @@ def load_roi_config(
         ),
         number=_roi_from_dict(
             data["number"]
+        ),
+        wheel=(
+            _roi_from_dict(data["wheel"])
+            if data.get("wheel")
+            else None
         ),
     )

@@ -114,6 +114,21 @@ class Database:
                 CREATE INDEX IF NOT EXISTS
                 idx_spins_detected_at
                 ON spins(detected_at);
+
+
+                CREATE TABLE IF NOT EXISTS capture_stats (
+                    round_id INTEGER PRIMARY KEY,
+                    frames INTEGER NOT NULL,
+                    unique_frames INTEGER NOT NULL,
+                    duration_seconds REAL NOT NULL,
+                    stream_fps REAL NOT NULL,
+                    duplicate_ratio REAL NOT NULL,
+                    wheel_view_ratio REAL NULL,
+                    recorded_at TEXT NOT NULL,
+                    FOREIGN KEY (round_id)
+                    REFERENCES rounds(id)
+                    ON DELETE CASCADE
+                );
                 """
             )
 

@@ -10,7 +10,10 @@ import uvicorn
 from api.app import create_app
 from api.websocket_manager import ConnectionManager
 
+from analytics.capture_stats import CaptureStatsAccumulator
+
 from capture.camera_source import CameraSource
+from capture.threaded_source import ThreadedFrameSource
 
 from config.roi_config import load_roi_config
 from config.setup_rois import configure_rois
@@ -38,6 +41,9 @@ from detection.roi_processor import RoiProcessor
 from detection.status_result_recognizer import (
     StatusResultRecognizer,
 )
+from detection.wheel_view_detector import (
+    WheelViewDetector,
+)
 
 from detector.status import DetectorStatusHolder
 
@@ -53,6 +59,9 @@ from events.event_types import (
     StateChangedEvent,
 )
 
+from storage.capture_stats_repository import (
+    CaptureStatsRepository,
+)
 from storage.database import Database
 from storage.models import SpinSource
 from storage.round_repository import RoundRepository
@@ -67,6 +76,10 @@ ROI_CONFIG_PATH = "roi_config.json"
 
 RESULT_REFERENCE_PATH = (
     "references/result_idle.png"
+)
+
+WHEEL_REFERENCE_PATH = (
+    "references/wheel_view.png"
 )
 
 CAMERA_INDEX = 1
@@ -166,6 +179,10 @@ def main():
         database
     )
 
+    capture_stats_repository = (
+        CaptureStatsRepository(database)
+    )
+
     # ========================================================
     # API / EVENTS
     # ========================================================
@@ -218,9 +235,13 @@ def main():
     # CAMERA
     # ========================================================
 
-    source = CameraSource(
-        camera_index=CAMERA_INDEX,
+    source = ThreadedFrameSource(
+        CameraSource(
+            camera_index=CAMERA_INDEX,
+        )
     )
+
+    capture_stats = CaptureStatsAccumulator()
 
     # ========================================================
     # STATE
@@ -296,6 +317,9 @@ def main():
 
     roi_config = None
     result_detector = None
+    wheel_view_detector = None
+    wheel_visible = None
+    last_frame_index = 0
 
     last_status_ocr_time = 0.0
     last_result_ocr_time = 0.0
@@ -326,6 +350,9 @@ def main():
         )
         print(
             "B = Capture result baseline"
+        )
+        print(
+            "W = Capture wheel close-up baseline"
         )
         print()
 
@@ -375,22 +402,58 @@ def main():
                 "Loaded result idle reference."
             )
 
+        wheel_reference = load_reference(
+            WHEEL_REFERENCE_PATH
+        )
+
+        if wheel_reference is not None:
+
+            wheel_view_detector = (
+                WheelViewDetector(
+                    wheel_reference
+                )
+            )
+
+            print(
+                "Loaded wheel view reference."
+            )
+
         # ====================================================
         # MAIN LOOP
         # ====================================================
 
         while True:
 
-            frame = source.read()
+            timed = source.latest()
 
-            if frame is None:
+            if (
+                timed is None
+                or timed.index == last_frame_index
+            ):
+                time.sleep(0.001)
                 continue
+
+            # Frames the loop skipped while OCR was busy
+            # still count towards this round's capture stats.
+            for skipped in source.frames_since(
+                last_frame_index
+            ):
+                if skipped.index != timed.index:
+                    capture_stats.push(
+                        skipped.timestamp,
+                        skipped.is_duplicate,
+                    )
+
+            last_frame_index = timed.index
+
+            frame = timed.frame
 
             preview = frame.copy()
 
             status_frame = None
             result_frame = None
             number_frame = None
+            wheel_frame = None
 
             # =================================================
             # ROI
@@ -454,6 +517,43 @@ def main():
                     "Number ROI",
                     number_frame,
                 )
+
+                if roi_config.wheel is not None:
+
+                    wheel_frame = (
+                        RoiProcessor.crop(
+                            frame,
+                            roi_config.wheel,
+                        )
+                    )
+
+                    draw_roi(
+                        preview,
+                        roi_config.wheel,
+                        "WHEEL",
+                        (0, 165, 255),
+                    )
+
+            # =================================================
+            # WHEEL VIEW / CAPTURE STATS
+            # =================================================
+
+            wheel_visible = (
+                wheel_view_detector.is_wheel_view(
+                    wheel_frame
+                )
+                if (
+                    wheel_view_detector is not None
+                    and wheel_frame is not None
+                )
+                else None
+            )
+
+            capture_stats.push(
+                timed.timestamp,
+                timed.is_duplicate,
+                wheel_visible,
+            )
 
             # =================================================
             # STATUS REGION OCR
@@ -570,6 +670,8 @@ def main():
                             current_db_round_id = (
                                 stored_round.id
                             )
+
+                            capture_stats.reset()
 
                             latest_status_result = None
 
@@ -951,6 +1053,25 @@ def main():
                                         current_db_round_id
                                     )
 
+                                    round_stats = (
+                                        capture_stats.summary()
+                                    )
+
+                                    if round_stats is not None:
+
+                                        capture_stats_repository.save(
+                                            current_db_round_id,
+                                            round_stats,
+                                        )
+
+                                        print(
+                                            f"Capture: "
+                                            f"{round_stats.stream_fps:.1f} "
+                                            f"stream FPS, "
+                                            f"{round_stats.duplicate_ratio:.0%} "
+                                            f"duplicate frames"
+                                        )
+
                                     print(
                                         f"Stored spin: "
                                         f"{stored_spin.id}"
@@ -1011,6 +1132,28 @@ def main():
                 2,
             )
 
+            view_label = {
+                True: "WHEEL",
+                False: "OTHER",
+                None: "-",
+            }[wheel_visible]
+
+            cv2.putText(
+                preview,
+                (
+                    f"Stream: "
+                    f"{source.stream_fps:.1f} FPS "
+                    f"(capture "
+                    f"{source.capture_fps:.1f}) "
+                    f"View: {view_label}"
+                ),
+                (30, 130),
+                cv2.FONT_HERSHEY_SIMPLEX,
+                0.8,
+                (0, 255, 255),
+                2,
+            )
+
             cv2.imshow(
                 "Roulette Capture",
                 preview,
@@ -1063,6 +1206,31 @@ def main():
                 print(
                     "Result idle reference captured."
                 )
+
+            if key == ord("w"):
+
+                if wheel_frame is None:
+
+                    print(
+                        "Configure a WHEEL ROI first (R)."
+                    )
+
+                else:
+
+                    save_reference(
+                        wheel_frame,
+                        WHEEL_REFERENCE_PATH,
+                    )
+
+                    wheel_view_detector = (
+                        WheelViewDetector(
+                            wheel_frame
+                        )
+                    )
+
+                    print(
+                        "Wheel view reference captured."
+                    )
 
     finally:
 
