@@ -1,7 +1,6 @@
 from collections import deque
 from dataclasses import dataclass
 
-import cv2
 import numpy as np
 
 
@@ -20,10 +19,14 @@ class FrameClock:
     capture rate, so the capture FPS overstates how often the picture
     actually changes. Only frames that differ from the previous one count
     towards the stream FPS.
+
+    A repeated frame is bit-identical to the previous grab, so frames are
+    compared exactly on a pixel grid. Averaging over a thumbnail hid real
+    motion: a slowly turning rotor changes too few pixels to move the mean.
     """
 
-    def __init__(self, duplicate_threshold: float = 0.5, window_seconds: float = 2.0):
-        self.duplicate_threshold = duplicate_threshold
+    def __init__(self, window_seconds: float = 2.0, sample_step: int = 4):
+        self.sample_step = sample_step
         self.window_seconds = window_seconds
         self._index = 0
         self._previous = None
@@ -31,13 +34,9 @@ class FrameClock:
         self._all_times: deque[float] = deque()
 
     def stamp(self, frame, timestamp: float) -> TimedFrame:
-        thumbnail = self._thumbnail(frame)
-        is_duplicate = (
-            self._previous is not None
-            and thumbnail.shape == self._previous.shape
-            and float(np.mean(cv2.absdiff(thumbnail, self._previous))) < self.duplicate_threshold
-        )
-        self._previous = thumbnail
+        sample = np.ascontiguousarray(frame[::self.sample_step, ::self.sample_step])
+        is_duplicate = self._previous is not None and np.array_equal(sample, self._previous)
+        self._previous = sample
         self._all_times.append(timestamp)
         if not is_duplicate:
             self._unique_times.append(timestamp)
@@ -62,8 +61,3 @@ class FrameClock:
         for times in (self._unique_times, self._all_times):
             while times and now - times[0] > self.window_seconds:
                 times.popleft()
-
-    @staticmethod
-    def _thumbnail(frame):
-        gray = frame if frame.ndim == 2 else cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-        return cv2.resize(gray, (64, 36), interpolation=cv2.INTER_AREA)
