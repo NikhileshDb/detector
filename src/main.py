@@ -102,6 +102,21 @@ API_HOST = "0.0.0.0"
 API_PORT = 8000
 
 
+def _opencv_gui_available() -> bool:
+    """Return whether this OpenCV build has a usable HighGUI backend."""
+    try:
+        return bool(cv2.currentUIFramework())
+    except (AttributeError, cv2.error):
+        # Older OpenCV versions do not expose currentUIFramework. Probe a
+        # harmless window operation and detect the common headless-build error.
+        try:
+            cv2.namedWindow("__opencv_gui_probe__", cv2.WINDOW_NORMAL)
+            cv2.destroyWindow("__opencv_gui_probe__")
+            return True
+        except cv2.error:
+            return False
+
+
 # ============================================================
 # API SERVER (background thread)
 # ============================================================
@@ -174,6 +189,13 @@ def draw_roi(
 # ============================================================
 
 def main():
+
+    preview_enabled = _opencv_gui_available()
+    if not preview_enabled:
+        print(
+            "OpenCV GUI support is unavailable; running without preview "
+            "windows or keyboard controls."
+        )
 
     # ========================================================
     # DATABASE
@@ -519,20 +541,10 @@ def main():
                     (255, 0, 255),
                 )
 
-                cv2.imshow(
-                    "Status ROI",
-                    status_frame,
-                )
-
-                cv2.imshow(
-                    "Result ROI",
-                    result_frame,
-                )
-
-                cv2.imshow(
-                    "Number ROI",
-                    number_frame,
-                )
+                if preview_enabled:
+                    cv2.imshow("Status ROI", status_frame)
+                    cv2.imshow("Result ROI", result_frame)
+                    cv2.imshow("Number ROI", number_frame)
 
                 if roi_config.wheel is not None:
 
@@ -1170,19 +1182,10 @@ def main():
                 2,
             )
 
-            cv2.imshow(
-                "Roulette Capture",
-                preview,
-            )
-
-            # =================================================
-            # KEYS
-            # =================================================
-
-            key = (
-                cv2.waitKey(1)
-                & 0xFF
-            )
+            key = -1
+            if preview_enabled:
+                cv2.imshow("Roulette Capture", preview)
+                key = cv2.waitKey(1) & 0xFF
 
             if key == ord("q"):
                 break
@@ -1250,13 +1253,15 @@ def main():
 
     finally:
 
-        source.stop()
-
-        cv2.destroyAllWindows()
-
-        api_server.should_exit = True
-
-        api_thread.join(timeout=5)
+        try:
+            source.stop()
+        finally:
+            try:
+                if preview_enabled:
+                    cv2.destroyAllWindows()
+            finally:
+                api_server.should_exit = True
+                api_thread.join(timeout=5)
 
 
 if __name__ == "__main__":

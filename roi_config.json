@@ -1,20 +1,26 @@
 {
   "countdown": {
-    "x": 743,
-    "y": 529,
-    "width": 418,
-    "height": 42
+    "x": 785,
+    "y": 518,
+    "width": 344,
+    "height": 70
   },
   "result": {
-    "x": 732,
+    "x": 715,
     "y": 86,
-    "width": 476,
-    "height": 417
+    "width": 507,
+    "height": 415
   },
   "number": {
-    "x": 888,
-    "y": 281,
-    "width": 144,
-    "height": 115
+    "x": 884,
+    "y": 265,
+    "width": 145,
+    "height": 147
+  },
+  "wheel": {
+    "x": 709,
+    "y": 85,
+    "width": 511,
+    "height": 419
   }
 }

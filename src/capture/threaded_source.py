@@ -27,14 +27,17 @@ class ThreadedFrameSource:
         self._thread.start()
 
     def _run(self) -> None:
-        while self._running:
-            frame = self.source.read()
-            timestamp = time.perf_counter()
-            if frame is None:
-                time.sleep(0.001)
-                continue
-            with self._lock:
-                self._buffer.append(self.clock.stamp(frame, timestamp))
+        try:
+            while self._running:
+                frame = self.source.read()
+                timestamp = time.perf_counter()
+                if frame is None:
+                    time.sleep(0.001)
+                    continue
+                with self._lock:
+                    self._buffer.append(self.clock.stamp(frame, timestamp))
+        finally:
+            self.source.stop()
 
     def latest(self) -> TimedFrame | None:
         with self._lock:
@@ -59,4 +62,3 @@ class ThreadedFrameSource:
         if self._thread is not None:
             self._thread.join(timeout=2)
             self._thread = None
-        self.source.stop()

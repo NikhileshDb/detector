@@ -12,6 +12,17 @@ cd src
 ../.venv/Scripts/python.exe main.py
 ```
 
+EasyOCR depends on `opencv-python-headless`, while this application needs
+OpenCV's GUI windows for ROI selection. Install the project requirements, then
+reinstall the GUI package last so its `cv2` files replace the headless ones:
+
+```
+.venv/Scripts/python.exe -m pip install -r requirements.txt
+.venv/Scripts/python.exe -m pip uninstall -y opencv-python opencv-python-headless
+.venv/Scripts/python.exe -m pip install opencv-python==5.0.0.93
+.venv/Scripts/python.exe -c "import cv2; print(cv2.__version__, cv2.currentUIFramework())"
+```
+
 This starts both the camera/OCR loop (main thread, with the preview/ROI
 windows) and the API server (background thread) in one process.
 

@@ -22,6 +22,8 @@ class ScreenSource:
         self._last_grab = 0.0
 
     def start(self) -> None:
+        # Query monitor geometry on the caller thread. The MSS handle used
+        # for capture is created, used, and closed by the capture thread.
         with self._grabber_factory() as grabber:
             monitors = grabber.monitors
             if not 0 <= self.monitor < len(monitors):
@@ -45,6 +47,7 @@ class ScreenSource:
 
     def stop(self) -> None:
         if self._grabber is not None:
-            self._grabber.close()
+            grabber = self._grabber
             self._grabber = None
+            grabber.close()
         self._area = None
