@@ -8,11 +8,12 @@ class RotorSnapshotRepository:
     def __init__(self, database: Database):
         self.database = database
 
-    def save(self, round_id: int, state: RotorState, pocket_at_top: int) -> None:
+    def save(self, round_id: int, state: RotorState, pocket_at_top: int) -> bool:
+        """Store the first snapshot for a round; later ones are ignored."""
         with self.database.transaction() as connection:
-            connection.execute(
+            cursor = connection.execute(
                 """
-                INSERT OR REPLACE INTO rotor_snapshots (
+                INSERT OR IGNORE INTO rotor_snapshots (
                     round_id, zero_angle, rev_per_second, residual_pockets,
                     samples, pocket_at_top, recorded_at
                 ) VALUES (?, ?, ?, ?, ?, ?, ?)
@@ -22,6 +23,7 @@ class RotorSnapshotRepository:
                     state.samples, pocket_at_top, datetime.now(timezone.utc).isoformat(),
                 ),
             )
+            return cursor.rowcount == 1
 
     def with_results(self) -> list[dict]:
         """Snapshots joined to the confirmed result of the same round."""
@@ -29,7 +31,8 @@ class RotorSnapshotRepository:
             rows = connection.execute(
                 """
                 SELECT r.round_id, r.zero_angle, r.rev_per_second, r.residual_pockets,
-                       r.samples, r.pocket_at_top, s.number
+                       r.samples, r.pocket_at_top, r.recorded_at,
+                       s.number, s.detected_at
                 FROM rotor_snapshots r
                 JOIN spins s ON s.round_id = r.round_id
                 ORDER BY r.round_id

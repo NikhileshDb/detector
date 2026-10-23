@@ -936,7 +936,25 @@ def main():
 
                 rotor_state = rotor_tracker.state()
 
-                if rotor_state is not None:
+                # If this round's start was missed, the current id
+                # still points at a finished round. Saving there would
+                # pair this rotor with the previous round's result.
+                round_finished = (
+                    spin_repository.get_by_round(
+                        current_db_round_id
+                    )
+                    is not None
+                )
+
+                if round_finished:
+
+                    print(
+                        "Rotor snapshot skipped: round "
+                        "start was missed, so the round "
+                        "id is stale."
+                    )
+
+                elif rotor_state is not None:
 
                     rotor_snapshot_repository.save(
                         current_db_round_id,
