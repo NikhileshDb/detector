@@ -73,6 +73,10 @@ class RotorTracker:
         x, y = centroids[best]
         return atan2((y + y0 - self.cy) / self.ay, (x + x0 - self.cx) / self.ax)
 
+    @property
+    def sightings(self) -> int:
+        return len(self._history)
+
     def state(self) -> RotorState | None:
         if len(self._history) < self.min_samples:
             return None
