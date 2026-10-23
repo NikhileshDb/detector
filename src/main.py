@@ -488,11 +488,13 @@ def main():
                 time.sleep(0.001)
                 continue
 
+            new_frames = source.frames_since(
+                last_frame_index
+            )
+
             # Frames the loop skipped while OCR was busy
             # still count towards this round's capture stats.
-            for skipped in source.frames_since(
-                last_frame_index
-            ):
+            for skipped in new_frames:
                 if skipped.index != timed.index:
                     capture_stats.push(
                         skipped.timestamp,
@@ -595,10 +597,15 @@ def main():
                 )
 
             if rotor_tracker is not None:
-                rotor_tracker.observe(
-                    frame,
-                    timed.timestamp,
-                )
+                # OCR can hold the loop for a second or more, so
+                # feed the tracker every new frame captured since
+                # the last pass, not just the latest one.
+                for captured in new_frames:
+                    if not captured.is_duplicate:
+                        rotor_tracker.observe(
+                            captured.frame,
+                            captured.timestamp,
+                        )
                 draw_roi(
                     preview,
                     roi_config.rotor,
@@ -928,8 +935,13 @@ def main():
                 else:
 
                     print(
-                        "Rotor not tracked at bets closed "
-                        "(zero pocket not visible)."
+                        f"Rotor not tracked at bets closed: "
+                        f"{rotor_tracker.sightings} zero "
+                        f"sightings in the last "
+                        f"{rotor_tracker.window_seconds:.0f}s, "
+                        f"need {rotor_tracker.min_samples}. "
+                        f"0 means the green zero is never "
+                        f"found: redraw the ROTOR box (T)."
                     )
 
             # =================================================

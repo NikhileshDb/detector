@@ -73,3 +73,12 @@ def test_pocket_at_top():
     # zero in wheel order (26) is at the top.
     assert state(-pi / 2 + POCKET_ANGLE).pocket_at() == 1
     assert state(-pi / 2 - POCKET_ANGLE).pocket_at() == 36
+
+
+def test_sightings_counts_recent_zero_detections():
+    tracker = RotorTracker(RING)
+    for i in range(5):
+        tracker.observe(_frame(0.1 * i), i / 20)
+    tracker.observe(np.zeros((500, 800, 3), dtype=np.uint8), 0.3)
+
+    assert tracker.sightings == 5
