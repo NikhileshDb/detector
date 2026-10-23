@@ -61,6 +61,14 @@ class RotorTracker:
         return angle
 
     def zero_angle(self, frame) -> float | None:
+        position = self.zero_position(frame)
+        if position is None:
+            return None
+        x, y = position
+        return atan2((y - self.cy) / self.ay, (x - self.cx) / self.ax)
+
+    def zero_position(self, frame) -> tuple[int, int] | None:
+        """Return the detected green pocket centroid in full-frame pixels."""
         x0, y0, x1, y1 = self._bounds(frame.shape[:2])
         hsv = cv2.cvtColor(frame[y0:y1, x0:x1], cv2.COLOR_BGR2HSV)
         green = cv2.inRange(hsv, (45, 80, 60), (85, 255, 255)) & self._ring_mask(frame.shape[:2])
@@ -71,7 +79,7 @@ class RotorTracker:
         if stats[best, cv2.CC_STAT_AREA] < self.min_zero_pixels:
             return None
         x, y = centroids[best]
-        return atan2((y + y0 - self.cy) / self.ay, (x + x0 - self.cx) / self.ax)
+        return round(x + x0), round(y + y0)
 
     @property
     def sightings(self) -> int:

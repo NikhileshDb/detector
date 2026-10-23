@@ -613,6 +613,25 @@ def main():
                     (0, 255, 0),
                 )
 
+                zero_position = rotor_tracker.zero_position(frame)
+                if zero_position is not None:
+                    cv2.circle(
+                        preview,
+                        zero_position,
+                        20,
+                        (0, 255, 0),
+                        3,
+                    )
+                    cv2.putText(
+                        preview,
+                        "ZERO",
+                        (zero_position[0] + 24, zero_position[1] + 5),
+                        cv2.FONT_HERSHEY_SIMPLEX,
+                        0.7,
+                        (0, 255, 0),
+                        2,
+                    )
+
             # =================================================
             # WHEEL VIEW / CAPTURE STATS
             # =================================================
