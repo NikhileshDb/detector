@@ -41,10 +41,21 @@ def configure_rois(
     if number is None:
         return None
 
+    print(
+        "Select WHEEL region (the rotor in the "
+        "wheel close-up). Press Esc to skip."
+    )
+
+    wheel = select_roi(
+        frame,
+        "Select WHEEL ROI",
+    )
+
     config = DetectorRoiConfig(
         countdown=countdown,
         result=result,
         number=number,
+        wheel=wheel,
     )
 
     save_roi_config(

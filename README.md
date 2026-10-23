@@ -38,3 +38,24 @@ curl http://<lan-ip>:8000/api/status
 ```
 .venv/Scripts/python.exe -m pytest
 ```
+
+## Capture timing and wheel view
+
+Frames are read on a background thread and timestamped as they arrive, so
+slow OCR no longer delays capture. The preview shows two rates:
+
+- **Stream FPS**: how often the picture actually changes. This is the real
+  limit for timing the wheel. OBS repeats frames when the browser stream is
+  slower than its output rate.
+- **Capture FPS**: how often OBS delivers frames.
+
+To detect the wheel close-up:
+
+1. Press **R** and, after the three existing regions, select the **WHEEL**
+   region around the rotor (Esc skips it).
+2. While the stream shows the wheel close-up, press **W** to save
+   `references/wheel_view.png`.
+
+The overlay then shows `View: WHEEL` or `View: OTHER`. Each completed round
+saves its stream FPS, duplicate-frame ratio and wheel-view ratio to the
+`capture_stats` table, so later analysis can skip spins with poor video.
