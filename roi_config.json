@@ -1,26 +1,26 @@
 {
   "countdown": {
-    "x": 785,
-    "y": 518,
-    "width": 344,
-    "height": 70
+    "x": 779,
+    "y": 578,
+    "width": 364,
+    "height": 313
   },
   "result": {
-    "x": 715,
-    "y": 86,
-    "width": 507,
-    "height": 415
+    "x": 360,
+    "y": 7,
+    "width": 1237,
+    "height": 963
   },
   "number": {
-    "x": 884,
-    "y": 265,
-    "width": 145,
-    "height": 147
+    "x": 874,
+    "y": 521,
+    "width": 171,
+    "height": 161
   },
   "wheel": {
-    "x": 709,
-    "y": 85,
-    "width": 511,
-    "height": 419
+    "x": 320,
+    "y": 5,
+    "width": 1276,
+    "height": 982
   }
 }

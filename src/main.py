@@ -362,7 +362,7 @@ def main():
     last_status_ocr_time = 0.0
     last_result_ocr_time = 0.0
 
-    # Keep latest result evidence from status ROI.
+    # Keep latest optional result evidence from status ROI.
     latest_status_result = None
 
     try:
@@ -819,10 +819,7 @@ def main():
                     # 23 RED
                     # =========================================
 
-                    if (
-                        latest_status_result
-                        is not None
-                    ):
+                    if latest_status_result is not None:
 
                         if (
                             state_machine.state
@@ -843,10 +840,7 @@ def main():
                                 stabilizer.reset_candidate()
 
                                 print()
-                                print(
-                                    "Winning result text detected:"
-                                )
-
+                                print("Winning result text detected:")
                                 print(
                                     f"{latest_status_result.number} "
                                     f"{latest_status_result.color.value}"
@@ -855,7 +849,7 @@ def main():
                                 publish_state()
 
             # =================================================
-            # DUAL RESULT OCR
+            # RESULT OCR
             # =================================================
 
             if (
@@ -863,8 +857,12 @@ def main():
                 is not None
                 and number_frame
                 is not None
-                and state_machine.state
-                == DetectorState.READING_RESULT
+                and state_machine.state in {
+                    DetectorState.WAITING_FOR_RESULT,
+                    DetectorState.BETS_CLOSING,
+                    DetectorState.NEXT_GAME_SOON,
+                    DetectorState.READING_RESULT,
+                }
             ):
 
                 now = time.monotonic()
@@ -918,6 +916,28 @@ def main():
                             f"{number_result.confidence:.3f}"
                         )
 
+                    # Status text is not present in every view. A confident
+                    # dedicated number ROI can independently signal and
+                    # confirm a result after betting has closed.
+                    if (
+                        status_result is None
+                        and number_result is not None
+                        and state_machine.state
+                        in {
+                            DetectorState.WAITING_FOR_RESULT,
+                            DetectorState.BETS_CLOSING,
+                            DetectorState.NEXT_GAME_SOON,
+                        }
+                    ):
+                        entered = state_machine.on_result_visible()
+                        if entered:
+                            stabilizer.reset_candidate()
+                            print(
+                                "Result number detected in number ROI; "
+                                "status text is unavailable."
+                            )
+                            publish_state()
+
                     # -----------------------------------------
                     # EVIDENCE
                     # -----------------------------------------
@@ -954,6 +974,19 @@ def main():
                             else None
                         ),
                     )
+
+                    # In alternate views the status text may be absent.
+                    # The number ROI remains sufficient evidence; its color
+                    # is deterministic from roulette rules and the stabilizer
+                    # still requires repeated matching reads.
+                    if status_result is None and number_result is not None:
+                        evidence = ResultEvidence(
+                            status_number=number_result.number,
+                            status_color=None,
+                            status_confidence=number_result.confidence,
+                            number_roi_number=number_result.number,
+                            number_roi_confidence=number_result.confidence,
+                        )
 
                     validated = (
                         evidence_validator
