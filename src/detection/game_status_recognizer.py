@@ -38,9 +38,9 @@ class GameStatusRecognizer:
             raw_text
         )
 
-        print(
-            f"GAME STATUS OCR: {normalized}"
-        )
+        # print(
+        #     f"GAME STATUS OCR: {normalized}"
+        # )
 
         # -------------------------
         # PLACE YOUR BETS

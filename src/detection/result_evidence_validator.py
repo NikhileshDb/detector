@@ -18,7 +18,20 @@ class ResultEvidenceValidator:
             return None
 
         if evidence.number_roi_number is None:
-            return None
+            # Some result layouts render the secondary number ROI differently
+            # even though the status ROI is clear. Let the stabilizer accept
+            # repeated, high-confidence status evidence in that case. A
+            # readable conflicting number is still rejected below.
+            if evidence.status_confidence is None or evidence.status_confidence < 0.60:
+                return None
+            expected = expected_color(evidence.status_number)
+            if evidence.status_color is not None and evidence.status_color != expected:
+                return None
+            return ValidatedResult(
+                number=evidence.status_number,
+                color=expected,
+                confidence=evidence.status_confidence,
+            )
 
         # Both regions must agree on number.
         if (

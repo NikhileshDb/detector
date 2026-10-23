@@ -1,15 +1,21 @@
 from fastapi import APIRouter, Depends, HTTPException
+from domain.roulette_rules import expected_color
 
 from api.dependencies import (
     get_event_publisher,
     get_manual_result_service,
     get_round_repository,
+    get_database,
+    get_spin_repository,
 )
-from api.schemas import ManualResultIn, RoundOut, SpinOut
+from api.schemas import InsertSpinIn, ManualResultIn, RoundOut, SpinOut
 from events.event_publisher import EventPublisher
 from events.event_types import ManualResultEvent
 from storage.manual_result_service import ManualResultService
 from storage.round_repository import RoundRepository
+from storage.database import Database
+from storage.models import RoundStatus, SpinSource
+from storage.spin_repository import SpinRepository
 
 
 router = APIRouter(prefix="/api/rounds", tags=["history"])
@@ -24,6 +30,42 @@ def list_rounds(
     rounds = round_repository.recent(limit)
 
     return [RoundOut.from_domain(item) for item in rounds]
+
+
+@router.delete("", status_code=204)
+def clear_history(
+    round_repository: RoundRepository = Depends(get_round_repository),
+) -> None:
+    round_repository.clear_all()
+
+
+@router.get("/missing", response_model=list[RoundOut])
+def list_missing(round_repository: RoundRepository = Depends(get_round_repository)) -> list[RoundOut]:
+    return [RoundOut.from_domain(item) for item in round_repository.missing()]
+
+
+@router.post("/insert", response_model=SpinOut, status_code=201)
+def insert_spin(
+    body: InsertSpinIn,
+    database: Database = Depends(get_database),
+    round_repository: RoundRepository = Depends(get_round_repository),
+    spin_repository: SpinRepository = Depends(get_spin_repository),
+) -> SpinOut:
+    color = expected_color(body.number)
+    with database.transaction() as connection:
+        before = round_repository.get_by_id(body.before_round_id, connection=connection)
+        if before is None:
+            raise HTTPException(status_code=404, detail="Target round not found.")
+        session_id = connection.execute("SELECT session_id FROM rounds WHERE id = ?", (body.before_round_id,)).fetchone()[0]
+        target = before.sequence
+        connection.execute("UPDATE rounds SET sequence = sequence + 1000000 WHERE sequence >= ?", (target,))
+        connection.execute("UPDATE rounds SET sequence = sequence - 999999 WHERE sequence >= ?", (target + 1000000,))
+        cursor = connection.execute(
+            "INSERT INTO rounds(session_id, sequence, status, started_at, created_at) VALUES (?, ?, ?, ?, ?)",
+            (session_id, target, RoundStatus.COMPLETED.value, before.started_at.isoformat(), before.started_at.isoformat()),
+        )
+        spin = spin_repository.create(cursor.lastrowid, body.number, color.value, SpinSource.INSERTED, connection=connection)
+    return SpinOut.from_domain(spin)
 
 
 @router.get("/latest", response_model=RoundOut)

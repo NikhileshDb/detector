@@ -4,12 +4,14 @@ from api.dependencies import (
     get_correction_service,
     get_event_publisher,
     get_spin_repository,
+    get_round_repository,
 )
 from api.schemas import CorrectionIn, SpinOut
 from events.event_publisher import EventPublisher
 from events.event_types import CorrectionAppliedEvent
 from storage.correction_service import CorrectionService
 from storage.spin_repository import SpinRepository
+from storage.round_repository import RoundRepository
 
 
 router = APIRouter(prefix="/api/spins", tags=["spins"])
@@ -18,10 +20,11 @@ router = APIRouter(prefix="/api/spins", tags=["spins"])
 @router.get("", response_model=list[SpinOut])
 def list_spins(
     limit: int = 100,
+    session_id: int | None = None,
     spin_repository: SpinRepository = Depends(get_spin_repository),
 ) -> list[SpinOut]:
 
-    spins = spin_repository.recent(limit)
+    spins = spin_repository.recent(limit, session_id=session_id)
 
     return [SpinOut.from_domain(item) for item in spins]
 
@@ -41,6 +44,15 @@ def get_spin_for_round(
         )
 
     return SpinOut.from_domain(spin)
+
+
+@router.delete("/round/{round_id}", status_code=204)
+def delete_spin(
+    round_id: int,
+    round_repository: RoundRepository = Depends(get_round_repository),
+) -> None:
+    if not round_repository.delete(round_id):
+        raise HTTPException(status_code=404, detail="Spin round not found.")
 
 
 @router.patch("/round/{round_id}/correction", response_model=SpinOut)

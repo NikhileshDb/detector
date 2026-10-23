@@ -25,18 +25,31 @@ class RoundRepository:
 
         with self.database.connect() as connection:
 
+            if connection.execute(
+                "SELECT 1 FROM rounds WHERE sequence = ? LIMIT 1",
+                (sequence,),
+            ).fetchone() is not None:
+                # Inserted historical rounds can shift sequence values. The
+                # detector's round id is still monotonic, but it is no longer
+                # guaranteed to be an unused ordering value.
+                sequence = connection.execute(
+                    "SELECT COALESCE(MAX(sequence), 0) + 1 FROM rounds"
+                ).fetchone()[0]
+
             cursor = connection.execute(
                 """
                 INSERT INTO rounds (
                     sequence,
+                    session_id,
                     status,
                     started_at,
                     created_at
                 )
-                VALUES (?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?)
                 """,
                 (
                     sequence,
+                    connection.execute("SELECT id FROM sessions WHERE is_active = 1 LIMIT 1").fetchone()[0],
                     RoundStatus.ACTIVE.value,
                     now.isoformat(),
                     now.isoformat(),
@@ -216,6 +229,21 @@ class RoundRepository:
             self._map(row)
             for row in rows
         ]
+
+    def missing(self) -> list[StoredRound]:
+        with self.database.connect() as connection:
+            rows = connection.execute("SELECT * FROM rounds WHERE status = ? ORDER BY sequence ASC", (RoundStatus.MISSING.value,)).fetchall()
+        return [self._map(row) for row in rows]
+
+    def clear_all(self) -> None:
+        """Delete all rounds; spins are removed by the database cascade."""
+        with self.database.connect() as connection:
+            connection.execute("DELETE FROM rounds")
+
+    def delete(self, round_id: int) -> bool:
+        with self.database.connect() as connection:
+            cursor = connection.execute("DELETE FROM rounds WHERE id = ?", (round_id,))
+            return cursor.rowcount > 0
 
     def _set_status(
         self,

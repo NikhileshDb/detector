@@ -30,6 +30,11 @@ class ManualResultIn(BaseModel):
     number: str
 
 
+class InsertSpinIn(BaseModel):
+    before_round_id: int
+    number: str
+
+
 class CorrectionIn(BaseModel):
     corrected_number: str
 

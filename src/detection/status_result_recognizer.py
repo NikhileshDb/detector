@@ -55,9 +55,9 @@ class StatusResultRecognizer:
             .strip()
         )
 
-        print(
-            f"STATUS RESULT OCR: {normalized}"
-        )
+        # print(
+        #     f"STATUS RESULT OCR: {normalized}"
+        # )
 
         match = re.search(
             r"\b(00|[0-9]|[12][0-9]|3[0-6])\b"

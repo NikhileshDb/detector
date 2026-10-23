@@ -510,6 +510,8 @@ def main():
                         == GameStatus.PLACE_YOUR_BETS
                     ):
 
+                        previous_detector_state = state_machine.state
+
                         event = (
                             state_machine
                             .on_place_your_bets()
@@ -524,6 +526,11 @@ def main():
                             if (
                                 current_db_round_id
                                 is not None
+                                and previous_detector_state
+                                not in {
+                                    DetectorState.READING_RESULT,
+                                    DetectorState.RESULT_CONFIRMED,
+                                }
                             ):
 
                                 previous_spin = (

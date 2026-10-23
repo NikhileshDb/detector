@@ -1,4 +1,5 @@
 import sqlite3
+from datetime import datetime, timezone
 from contextlib import closing, contextmanager
 from pathlib import Path
 from typing import Iterator
@@ -69,6 +70,14 @@ class Database:
                     created_at TEXT NOT NULL
                 );
 
+                CREATE TABLE IF NOT EXISTS sessions (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    name TEXT NOT NULL,
+                    started_at TEXT NOT NULL,
+                    ended_at TEXT NULL,
+                    is_active INTEGER NOT NULL DEFAULT 0
+                );
+
 
                 CREATE TABLE IF NOT EXISTS spins (
                     id TEXT PRIMARY KEY,
@@ -107,3 +116,13 @@ class Database:
                 ON spins(detected_at);
                 """
             )
+
+            columns = {row["name"] for row in connection.execute("PRAGMA table_info(rounds)")}
+            if "session_id" not in columns:
+                connection.execute("ALTER TABLE rounds ADD COLUMN session_id INTEGER REFERENCES sessions(id) ON DELETE CASCADE")
+            active = connection.execute("SELECT id FROM sessions WHERE is_active = 1 LIMIT 1").fetchone()
+            if active is None:
+                now = datetime.now(timezone.utc).isoformat()
+                connection.execute("INSERT INTO sessions(name, started_at, is_active) VALUES (?, ?, 1)", ("Legacy session", now))
+                session_id = connection.execute("SELECT last_insert_rowid()").fetchone()[0]
+                connection.execute("UPDATE rounds SET session_id = ? WHERE session_id IS NULL", (session_id,))

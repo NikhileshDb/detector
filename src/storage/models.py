@@ -16,6 +16,7 @@ class SpinSource(str, Enum):
     AUTO = "AUTO"
     MANUAL = "MANUAL"
     CORRECTED = "CORRECTED"
+    INSERTED = "INSERTED"
 
 
 @dataclass(frozen=True)

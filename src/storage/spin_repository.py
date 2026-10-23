@@ -120,6 +120,7 @@ class SpinRepository:
     def recent(
         self,
         limit: int = 100,
+        session_id: int | None = None,
     ) -> list[StoredSpin]:
 
         with self.database.connect() as connection:
@@ -128,10 +129,12 @@ class SpinRepository:
                 """
                 SELECT *
                 FROM spins
-                ORDER BY detected_at DESC
+                JOIN rounds ON rounds.id = spins.round_id
+                WHERE rounds.session_id = COALESCE(?, (SELECT id FROM sessions WHERE is_active = 1 LIMIT 1))
+                ORDER BY rounds.sequence DESC
                 LIMIT ?
                 """,
-                (limit,),
+                (session_id, limit),
             ).fetchall()
 
         return [
